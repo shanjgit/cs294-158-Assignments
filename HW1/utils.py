@@ -48,6 +48,7 @@ class MaskedConv2D(layers.Conv2D):
         
     #@tf.function     
     def call(self, x):
+        # self.kernel = self.kernel * self.mask
         return super(MaskedConv2D, self).call(x)
 
     def get_config(self):
