@@ -29,7 +29,7 @@ class MaskedConv2D(layers.Conv2D):
         if not type_A:
             m[size//2, size//2] = 1
         return m
-
+    
     def build(self, input_shape):
         super(MaskedConv2D, self).build(input_shape)
         #rint('Use customized mask layer')
