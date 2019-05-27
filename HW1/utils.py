@@ -24,27 +24,30 @@ class MaskedConv2D(layers.Conv2D):
         self.mask_type = mask_type
         self.mask = None
     
+
     def __make_mask(self, size, type_A):
         m = np.zeros((size, size), dtype=np.float32)
         m[:size//2, :] = 1
         m[size//2, :size//2] = 1
         if not type_A:
             m[size//2, size//2] = 1
+        
         return m
     
     def build(self, input_shape):
         super(MaskedConv2D, self).build(input_shape)
         #rint('Use customized mask layer')
 
-        # Create a numpy array of ones in the shape of our convolution weights.
-        self.mask = self.__make_mask(self.kernel_size[0], self.mask_type=='A')
+        # Create a tf tensor of ones in the shape of our convolution weights.
+        # ,then multiply this tensor with self.kernel
+        m = self.__make_mask(self.kernel_size[0], self.mask_type=='A')
+        
         # Convert the numpy mask into a tensor mask.
-        self.mask = tf.Variable(self.mask[:,:,np.newaxis, np.newaxis], trainable=False, dtype=tf.float32)
-        
-        
-    @tf.function
-    def call(self, x):
+        self.mask = tf.Variable(m[:,:,np.newaxis, np.newaxis], trainable=False, dtype=tf.float32)
         self.kernel = self.kernel * self.mask
+        
+    #@tf.function     
+    def call(self, x):
         return super(MaskedConv2D, self).call(x)
 
     def get_config(self):
@@ -62,7 +65,7 @@ class ResNetBlock(layers.Layer):
         self.conv1x1_2 = layers.Conv2D(self.channels, (1,1), padding='same')
         self.conv_masked = MaskedConv2D(self.channels//2, 3, mask_type='B', activation='relu', 
                                                                                 padding='same')
-    @tf.function    
+    #@tf.function
     def call(self, inputs, debug=False):
         if debug: tf.print('input',inputs.shape)
         res = self.conv1x1_1(inputs)
@@ -84,7 +87,7 @@ class PixelCNN(keras.Model):
         self.conv1x1_1 = layers.Conv2D(channels, (1,1), activation='relu', padding='same')
         self.conv1x1_2 = layers.Conv2D(final_channels, (1,1), padding='same')
     
-    @tf.function
+    #@tf.function
     def call(self, inputs, training=None):
         x = self.mask_1(inputs)
         for res in self.res_blocks:
