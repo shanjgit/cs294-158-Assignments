@@ -10,10 +10,12 @@ import tensorflow_probability as tfp
 class MaskedConv2D(layers.Conv2D):
     
     def __init__(self, filters: int, kernel_size: int, mask_type='B',**kwargs):
-        '''
+        '''Implementation of vernila PixelCNN from https://arxiv.org/abs/1601.06759
         Args:
             filters: `int`, number of output filters
-            kernel_size: `int` size of input kernel
+            kernel_size: `int`, size of CNN kernel
+  			mask_type: A `str` character, representing the type of mask kernel, either `A` or `B`, where `A`
+                       means that the mask kernel exclude the current pixel and the other includes the current pixel.
         
         '''
         super(MaskedConv2D, self).__init__(filters, kernel_size, **kwargs)
