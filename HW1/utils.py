@@ -3,9 +3,35 @@ import os
 import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
+from tensorflow.keras.layers import Activation, Reshape
 from tensorflow.keras import backend as K
 from tensorflow.keras import regularizers
+from tensorflow.python.eager import context
+from tensorflow.python.framework import tensor_shape
+from tensorflow.python.keras import activations
+from tensorflow.python.keras import backend
+from tensorflow.python.keras import constraints
+from tensorflow.python.keras import initializers
+from tensorflow.python.keras import regularizers
+from tensorflow.python.keras.engine.base_layer import Layer
+from tensorflow.python.keras.engine.input_spec import InputSpec
+# imports for backwards namespace compatibility
+# pylint: disable=unused-import
+from tensorflow.python.keras.layers.pooling import AveragePooling1D
+from tensorflow.python.keras.layers.pooling import AveragePooling2D
+from tensorflow.python.keras.layers.pooling import AveragePooling3D
+from tensorflow.python.keras.layers.pooling import MaxPooling1D
+from tensorflow.python.keras.layers.pooling import MaxPooling2D
+from tensorflow.python.keras.layers.pooling import MaxPooling3D
+# pylint: enable=unused-import
+from tensorflow.python.keras.utils import conv_utils
+from tensorflow.python.keras.utils import tf_utils
+from tensorflow.python.ops import array_ops
+from tensorflow.python.ops import nn
+from tensorflow.python.ops import nn_ops
+from tensorflow.python.util.tf_export import keras_export
 import tensorflow_probability as tfp
+from matplotlib import pyplot as plt
 
 
 class MaskedConv2D(layers.Conv2D):
@@ -45,11 +71,24 @@ class MaskedConv2D(layers.Conv2D):
         
         # Convert the numpy mask into a tensor mask.
         self.mask = tf.Variable(m[:,:,np.newaxis, np.newaxis], trainable=False, dtype=tf.float32)
-        self.kernel = self.kernel * self.mask
-            
-    def call(self, x):
         #self.kernel = self.kernel * self.mask
-        return super(MaskedConv2D, self).call(x)
+            
+    @tf.function
+    def call(self, inputs):
+        outputs = self._convolution_op(inputs, self.kernel*self.mask)
+        if self.use_bias:
+            if self.data_format == 'channels_first':
+                if self.rank == 1:
+                    bias = array_ops.reshape(self.bias, (1, self.filters, 1))
+                    outputs += bias
+                else:
+                    outputs = nn.bias_add(outputs, self.bias, data_format='NCHW')
+            else:
+                outputs = nn.bias_add(outputs, self.bias, data_format='NHWC')
+            
+        if self.activation is not None:
+            return self.activation(outputs)
+        return outputs
 
     def get_config(self):
         # Add the mask type property to the config.
@@ -64,8 +103,9 @@ class ResNetBlock(layers.Layer):
         self.channels = channels
         self.conv1x1_1 = layers.Conv2D(self.channels//2, (1,1), activation='relu', padding='same')
         self.conv1x1_2 = layers.Conv2D(self.channels, (1,1), padding='same')
-        self.conv_masked = MaskedConv2D(self.channels//2, 3, mask_type='B', activation='relu', 
-                                                                                padding='same')
+        self.conv_masked = MaskedConv2D(self.channels//2, 3, mask_type='B', activation='relu', padding='same')
+    
+    @tf.function
     def call(self, inputs, debug=False):
         if debug: tf.print('input',inputs.shape)
         res = self.conv1x1_1(inputs)
@@ -79,14 +119,15 @@ class ResNetBlock(layers.Layer):
     
 class PixelCNN(keras.Model):
 
-    def __init__(self, channels, final_channels):
+    def __init__(self, channels, final_channels=3*4):
         super(PixelCNN, self).__init__()
         self.res_blocks = [ResNetBlock(channels) for _ in range(12)]
         self.mask_2 = MaskedConv2D(channels, 3, mask_type='B', activation='relu', padding='same')
         self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', activation='relu', padding='same')
         self.conv1x1_1 = layers.Conv2D(channels, (1,1), activation='relu', padding='same')
-        self.conv1x1_2 = layers.Conv2D(final_channels, (1,1), padding='same')
+        self.conv1x1_2 = layers.Conv2D(final_channels, (1,1), activation='relu',padding='same')
     
+    @tf.function
     def call(self, inputs, training=None):
         x = self.mask_1(inputs)
         for res in self.res_blocks:
@@ -94,10 +135,35 @@ class PixelCNN(keras.Model):
         x = self.mask_2(x)
         x = self.conv1x1_1(x)
         x = self.conv1x1_2(x)
+        x = Reshape((28*28*3, 4))(x)
+        x = Activation('softmax')(x)
         return x
         
 
 def make_dir(d):
     if not os.path.exists(d):
         os.makedirs(d)
-         
+    return None
+
+def nll(prob, x):
+    dist = tfp.distributions.Categorical(probs=prob)
+    return tf.cast(tf.reduce_mean(-dist.log_prob(x)), tf.float32)
+
+
+def plot_training_history(title, label, val_history, train_history, train_marker='.', val_marker='.', labels=None):
+    """utility function for plotting training history"""
+    plt.title(title)
+    plt.xlabel(label)
+    train_plots = train_history
+    val_plots = val_history
+    num_train = len(train_plots)
+    for i in range(num_train):
+        label='train_loss'
+        if labels is not None:
+            label += str(labels[i])
+        plt.plot(train_plots[i], train_marker, label=label)
+    label='val_loss'
+    if labels is not None:
+        label += str(labels[0])
+    plt.plot(val_plots, val_marker, label=label)
+    plt.legend(loc='lower center', ncol=num_train+1) 
