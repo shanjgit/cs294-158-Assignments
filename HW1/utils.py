@@ -4,6 +4,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Activation, Reshape
+from tensorflow.keras.layers.experimental import LayerNormalization as LayerNorm
 from tensorflow.keras import backend as K
 from tensorflow.keras import regularizers
 from tensorflow.python.eager import context
@@ -101,16 +102,19 @@ class ResNetBlock(layers.Layer):
     def __init__(self, channels=128):
         super(ResNetBlock, self).__init__()
         self.channels = channels
-        self.conv1x1_1 = layers.Conv2D(self.channels//2, (1,1), activation='relu', padding='same')
+        self.conv1x1_1 = layers.Conv2D(self.channels//2, (1,1), padding='same',use_bias=False)
         self.conv1x1_2 = layers.Conv2D(self.channels, (1,1), padding='same')
         self.conv_masked = MaskedConv2D(self.channels//2, 3, mask_type='B', activation='relu', padding='same')
+        self.ln = LayerNorm(scale=False)
     
     @tf.function
     def call(self, inputs, debug=False):
         if debug: tf.print('input',inputs.shape)
         res = self.conv1x1_1(inputs)
         if debug: tf.print('conv1.1',res.shape)
-        # res = self.conv_masked(res)
+        res = self.ln(res)
+        res = Activation('relu')(res)
+        res = self.conv_masked(res)
         if debug: tf.print('masked',res.shape)
         res = self.conv1x1_2(res)
         if debug: tf.print('conv1.2',res.shape)
@@ -123,9 +127,12 @@ class PixelCNN(keras.Model):
         super(PixelCNN, self).__init__()
         self.res_blocks = [ResNetBlock(channels) for _ in range(12)]
         self.mask_2 = MaskedConv2D(channels, 3, mask_type='B', activation='relu', padding='same')
-        self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', activation='relu', padding='same')
-        self.conv1x1_1 = layers.Conv2D(channels, (1,1), activation='relu', padding='same')
-        self.conv1x1_2 = layers.Conv2D(final_channels, (1,1), activation='relu',padding='same')
+        self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', activation='relu', 
+                                   padding='same')
+        
+        self.conv1x1_1 = layers.Conv2D(channels, (1,1), padding='same',use_bias=False)
+        self.conv1x1_2 = layers.Conv2D(final_channels, (1,1),padding='same')
+        self.ln_1 = LayerNorm(scale=False)
     
     @tf.function
     def call(self, inputs, training=None):
@@ -134,6 +141,8 @@ class PixelCNN(keras.Model):
             x = res(x)
         x = self.mask_2(x)
         x = self.conv1x1_1(x)
+        x = self.ln_1(x)
+        x = Activation('relu')(x)
         x = self.conv1x1_2(x)
         x = Reshape((28*28*3, 4))(x)
         x = Activation('softmax')(x)
