@@ -123,8 +123,9 @@ class ResNetBlock(layers.Layer):
     
 class PixelCNN(keras.Model):
 
-    def __init__(self, channels, final_channels=3*4):
+    def __init__(self, channels, final_channels=3*4, output_made = False):
         super(PixelCNN, self).__init__()
+        self.output_made = output_made
         self.res_blocks = [ResNetBlock(channels) for _ in range(12)]
         self.mask_2 = MaskedConv2D(channels, 3, mask_type='B', activation='relu', padding='same')
         self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', activation='relu', 
@@ -149,6 +150,32 @@ class PixelCNN(keras.Model):
         return x
         
 
+class PixelCNNLayer(layers.Layer):
+
+    def __init__(self, channels, final_channels=3*4,**kwargs):
+        super(PixelCNNLayer, self).__init__(**kwargs)
+        self.res_blocks = [ResNetBlock(channels) for _ in range(12)]
+        self.mask_2 = MaskedConv2D(channels, 3, mask_type='B', activation='relu', padding='same')
+        self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', activation='relu', 
+                                   padding='same')
+        
+        self.conv1x1_1 = layers.Conv2D(channels, (1,1), padding='same',use_bias=False)
+        self.conv1x1_2 = layers.Conv2D(final_channels, (1,1),padding='same')
+        self.ln_1 = LayerNorm(scale=False)
+    
+    @tf.function
+    def call(self, inputs):
+        x = self.mask_1(inputs)
+        for res in self.res_blocks:
+            x = res(x)
+        x = self.mask_2(x)
+        x = self.conv1x1_1(x)
+        x = self.ln_1(x)
+        x = Activation('relu')(x)
+        x = self.conv1x1_2(x)
+        x = Activation('relu')(x)
+        return x        
+        
 def make_dir(d):
     if not os.path.exists(d):
         os.makedirs(d)
