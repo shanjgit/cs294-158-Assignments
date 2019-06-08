@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Activation, Reshape
-from tensorflow.keras.layers.experimental import LayerNormalization as LayerNorm
+from tensorflow.keras.layers import LayerNormalization as LayerNorm
 from tensorflow.keras import backend as K
 from tensorflow.keras import regularizers
 from tensorflow.python.eager import context
