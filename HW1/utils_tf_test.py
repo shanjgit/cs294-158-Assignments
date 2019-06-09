@@ -43,6 +43,21 @@ class SeqModelTest(tf.test.TestCase):
         out_1 = self.model(test_data_1)
         self.assertAllEqual(np.array([1,28,28,12]),tf.shape(out_1))
         
+
+class NLLTest(tf.test.TestCase):
+    with open('./mnist-hw1.pkl', 'rb') as fp:
+        data = pickle.load(fp)
+    data = data['train'].astype(np.float32)
+    # model = PixelCNN(128, 3*4)
+        
+    def test_nll(self):
+        test_data = tf.Variable(self.data[:1],dtype=tf.float32)
+        logits = tf.Variable(np.zeros((1,28,28,3,4)),dtype=tf.float32)
+        out = nll(logits,test_data)
+        ideal = -tf.math.log(0.25)
+        print(ideal)
+        print(out)
+        self.assertAlmostEqual(out,ideal,delta=1e-5)
     
 if __name__ == "__main__":
     tf.test.main()

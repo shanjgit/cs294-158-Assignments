@@ -145,8 +145,11 @@ class PixelCNN(keras.Model):
         x = self.ln_1(x)
         x = Activation('relu')(x)
         x = self.conv1x1_2(x)
-        x = Reshape((28*28*3, 4))(x)
-        x = Activation('softmax')(x)
+        
+        x = Reshape((28,28,3,4))(x)
+        # tf.print(x.shape)
+        # x = Activation('softmax')(x)
+        # x = tf.nn.softmax(x, axis=-1)
         return x
         
 
@@ -181,9 +184,10 @@ def make_dir(d):
         os.makedirs(d)
     return None
 
-def nll(prob, x):
-    dist = tfp.distributions.Categorical(probs=prob)
-    return tf.cast(tf.reduce_mean(-dist.log_prob(x)), tf.float32)
+def nll(logits, x):
+    loss = tf.nn.softmax_cross_entropy_with_logits(tf.one_hot(tf.cast(x, dtype=tf.uint8), depth=4),
+                                                  logits, axis=-1) 
+    return tf.cast(tf.reduce_mean(loss), tf.float32)
 
 
 def plot_training_history(title, label, val_history, train_history, train_marker='.', val_marker='.', labels=None):
@@ -203,3 +207,21 @@ def plot_training_history(title, label, val_history, train_history, train_marker
         label += str(labels[0])
     plt.plot(val_plots, val_marker, label=label)
     plt.legend(loc='lower center', ncol=num_train+1) 
+    
+    
+def sample_image(batch_size, model):
+    image = np.random.choice(4, size=(batch_size, 28, 28, 3))
+    for i in range(28):
+        for j in range(28):
+            for k in range(3):
+                prob_output =  model(tf.Variable(image, dtype=tf.float32, trainable=False)).numpy()
+                prob_output = prob_output.reshape((batch_size,28,28,3,-1))
+                
+                # print(prob_output.shape)
+                for b in range(batch_size):
+                    # if k == 0 and b ==0: 
+                    print(f'i:{i}, j:{j}, k:{k}')
+                    print(prob_output[b,i,j,k])
+                    image[b, i, j, k] = np.random.choice(4, p=prob_output[b, i, j, k])
+            
+    return image
