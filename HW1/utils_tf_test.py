@@ -51,8 +51,8 @@ class NLLTest(tf.test.TestCase):
     # model = PixelCNN(128, 3*4)
         
     def test_nll(self):
-        test_data = tf.Variable(self.data[:1],dtype=tf.float32)
-        logits = tf.Variable(np.zeros((1,28,28,3,4)),dtype=tf.float32)
+        test_data = tf.Variable(self.data[:5],dtype=tf.float32)
+        logits = tf.Variable(np.zeros((5,28,28,3,4)),dtype=tf.float32)
         out = nll(logits,test_data)
         ideal = -tf.math.log(0.25)
         print(ideal)
