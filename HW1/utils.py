@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow import keras
 from tensorflow.keras import layers
 from tensorflow.keras.layers import Activation, Reshape
-from tensorflow.keras.layers import LayerNormalization as LayerNorm
+# from tensorflow.keras.layers import LayerNormalization as LayerNorm
 from tensorflow.keras.layers import BatchNormalization as BatchNorm
 from tensorflow.keras import backend as K
 from tensorflow.keras import regularizers
@@ -32,7 +32,7 @@ from tensorflow.python.ops import array_ops
 from tensorflow.python.ops import nn
 from tensorflow.python.ops import nn_ops
 from tensorflow.python.util.tf_export import keras_export
-import tensorflow_probability as tfp
+# import tensorflow_probability as tfp
 from matplotlib import pyplot as plt
 
 
@@ -130,7 +130,7 @@ class PixelCNN(keras.Model):
     def __init__(self, channels, final_channels=3*4, output_made = False):
         super(PixelCNN, self).__init__()
         self.output_made = output_made
-        self.res_blocks = [ResNetBlock(channels) for _ in range(12)]
+        self.res_blocks = [ResNetBlock(channels) for _ in range(15)]
         #Sequential([ResNetBlock(channels, input_shape=(28,28,channels))]+[ResNetBlock(channels) for _ in range(11)])
         self.mask_2 = MaskedConv2D(channels, 3, mask_type='B',  padding='same')
         self.mask_1 = MaskedConv2D(channels, 7, mask_type='A', 
@@ -162,9 +162,9 @@ class PixelCNN(keras.Model):
         x = self.conv1x1_2(x)        
         x = Reshape((28,28,3,-1))(x)
         # tf.print(x.shape)
-        # x = Activation('softmax')(x)
+        soft_max = Activation('softmax')(x)
         # x = tf.nn.softmax(x, axis=-1)
-        return x
+        return x, soft_max
         
 
 class PixelCNNLayer(layers.Layer):
@@ -222,20 +222,32 @@ def plot_training_history(title, label, val_history, train_history, train_marker
     plt.plot(val_plots, val_marker, label=label)
     plt.legend(loc='lower center', ncol=num_train+1) 
     
+
+def make_sample_fn(model):
+    @tf.function
+    def f(img,i,j,k):
+        _ ,prob_output =  model(tf.cast(img, tf.float32))
+        sample =  tf.random.categorical(prob_output[:,i,j,k], num_samples=1, dtype=tf.int32, seed=0)
+        
+        return tf.squeeze(sample)
+    return f  
+    
     
 def sample_image(batch_size, model):
+    samp_fn = make_sample_fn(model)
     image = np.random.choice(4, size=(batch_size, 28, 28, 3))
     for i in range(28):
         for j in range(28):
             for k in range(3):
-                prob_output =  model(tf.Variable(image, dtype=tf.float32, trainable=False)).numpy()
-                prob_output = prob_output.reshape((batch_size,28,28,3,-1))
-                
-                # print(prob_output.shape)
-                for b in range(batch_size):
-                    # if k == 0 and b ==0: 
-                    print(f'i:{i}, j:{j}, k:{k}')
-                    print(prob_output[b,i,j,k])
-                    image[b, i, j, k] = np.random.choice(4, p=prob_output[b, i, j, k])
+                sample = samp_fn(image,i,j,k)
+                #for b in range(batch_size):
+                #    if k == 0 and b ==0: 
+                print(f'i:{i}, j:{j}, k:{k}')
+                    # print(prob_output[b,i,j,k])
+                    # prob = tf.nn.softmax(prob_output[b,i,j,k], axis=-1).numpy()
+                    # print(prob)
+                    # prob /= prob.sum()
+                image[:, i, j, k] = sample.numpy().astype(np.int32)
+                del sample                
             
     return image
