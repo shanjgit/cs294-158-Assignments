@@ -12,6 +12,7 @@ class SimpleVAE(nn.Module):
         self.enc_logvar = nn.Linear(32, self.var_dim)
         self.dec_1 = nn.Linear(8, 32)
         self.dec_2 = nn.Linear(32, 2)
+        self.mse = nn.MSELoss()
 
     def encode(self, x):
         h1 = F.relu(self.fc1(x))
@@ -30,4 +31,22 @@ class SimpleVAE(nn.Module):
         mu, logvar = self.encode(x)
         z = self.reparameterize(mu, logvar)
         return self.decode(z), mu, logvar
+    
+    def loss_function(self, x_bar, x, mu, logvar):
+        '''Calculate the MSE loss and KL loss using input x and the reconscructed output x_bar
+        '''
+        BATCH_SIZE = len(x_bar)
+        
+        if self.training:
+            MSE = 0
+            for x_bar_sample in x_bar:
+                MSE += self.mse(x_bar_sample x)
+            MSE /= len(x_bar)
+        else:
+            MSE = self.mse(x_bar, x)
+
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        KLD /= (BATCH_SIZE * 2)
+
+        return MSE + KLD
 
