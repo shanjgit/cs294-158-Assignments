@@ -1,11 +1,14 @@
 import torch
+from torch import optim
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 
 class SimpleVAE(nn.Module):
     def __init__(self, var_dim):
         super(SimpleVAE, self).__init__()
+        assert var_dim in (1,8), 'var_dim must be either 1 or 8'
         self.var_dim = var_dim
         self.fc1 = nn.Linear(2, 32)
         self.enc_mean = nn.Linear(32, 8)
@@ -40,7 +43,7 @@ class SimpleVAE(nn.Module):
         if self.training:
             MSE = 0
             for x_bar_sample in x_bar:
-                MSE += self.mse(x_bar_sample x)
+                MSE += self.mse(x_bar_sample, x)
             MSE /= len(x_bar)
         else:
             MSE = self.mse(x_bar, x)
